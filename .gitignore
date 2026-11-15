@@ -1,0 +1,13 @@
+# Signing key: fixes the extension ID. Back it up outside the repository.
+key.pem
+*.pem
+
+# Build output
+build/
+*.zip
+*.crx
+
+node_modules/
+.env
+.DS_Store
+Thumbs.db

@@ -1,0 +1,406 @@
+body {
+  width: 320px;
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  background: #17181c;
+  color: #e8eaed;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 8px;
+}
+
+header img {
+  width: 22px;
+  height: 22px;
+}
+
+header h1 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+header .ver {
+  margin-left: auto;
+  font-size: 11px;
+  color: #9aa0a6;
+}
+
+.section {
+  padding: 0 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+.divider {
+  height: 1px;
+  background: #26282e;
+  margin: 6px 14px;
+}
+
+/* Toggle switch */
+.switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  display: inline-block;
+  flex: none;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  background: #3a3d44;
+  border-radius: 22px;
+  transition: background 0.2s;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.switch input:checked + .slider {
+  background: #518cf2;
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(18px);
+}
+
+/* Speed */
+output {
+  font-size: 13px;
+  font-weight: 600;
+  color: #cfe0ff;
+}
+
+input[type="range"] {
+  width: 100%;
+  margin: 2px 0 0;
+  accent-color: #518cf2;
+}
+
+.speed-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0 8px;
+  font-size: 11px;
+  color: #9aa0a6;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #8ab4ff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.link:disabled {
+  color: #555960;
+  cursor: default;
+}
+
+/* Color swatches */
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 9px 0;
+  padding: 2px 0 12px;
+}
+
+.swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0;
+  cursor: pointer;
+  justify-self: center;
+}
+
+.swatch.sel {
+  border: none;
+  box-shadow: 0 0 0 2px #17181c, 0 0 0 4px #e8eaed;
+}
+
+.custom.active {
+  border-color: #518cf2;
+}
+
+.custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  background: #202227;
+  border: 1px solid #2e3138;
+  color: #e8eaed;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.custom:hover {
+  background: #26282e;
+}
+
+.custom .dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: conic-gradient(#ef4444, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444);
+  flex: none;
+}
+
+.custom .hex {
+  margin-left: auto;
+  font-size: 11px;
+  color: #9aa0a6;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+/* The native color input is only opened programmatically */
+#customColor {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+}
+
+/* Preview mini-player */
+.preview {
+  position: relative;
+  height: 44px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  background:
+    radial-gradient(120px 70px at 30% 40%, #2c2f36, transparent),
+    linear-gradient(135deg, #23252b, #131418);
+}
+
+.preview .bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+}
+
+.preview .fill {
+  height: 100%;
+  width: 45%;
+  background: #00FF26;
+}
+
+/* Site lists (same layout as progressBar) */
+input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid #2e3138;
+  border-radius: 6px;
+  background: #202227;
+  color: #e8eaed;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: #518cf2;
+}
+
+input::placeholder {
+  color: #6b7078;
+}
+
+select {
+  background: #202227;
+  color: #e8eaed;
+  border: 1px solid #2e3138;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+button#siteBtn {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #2e3138;
+  border-radius: 6px;
+  background: #202227;
+  color: #e8eaed;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+button#siteBtn:hover:not(:disabled) {
+  background: #26282e;
+}
+
+button#siteBtn:disabled {
+  color: #6b7078;
+  cursor: default;
+}
+
+.hint {
+  font-size: 11px;
+  color: #9aa0a6;
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
+.footer {
+  padding: 0 14px 12px;
+  margin: 8px 0 0;
+}
+
+#siteList {
+  margin: 8px 0 12px;
+  border: 1px solid #2e3138;
+  border-radius: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.site-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.site-row + .site-row {
+  border-top: 1px solid #26282e;
+}
+
+.site-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-row .bin {
+  width: auto;
+  padding: 2px;
+  border: none;
+  background: none;
+  color: #9aa0a6;
+  line-height: 0;
+  flex: none;
+  cursor: pointer;
+}
+
+.site-row .bin:hover {
+  color: #ef4444;
+  background: none;
+}
+
+/* Shortcuts */
+.shortcuts details {
+  padding-bottom: 10px;
+}
+
+.shortcuts summary {
+  padding: 8px 0;
+  cursor: pointer;
+  color: #c5c9ce;
+  list-style: none;
+}
+
+.shortcuts summary::-webkit-details-marker {
+  display: none;
+}
+
+.shortcuts summary::before {
+  content: "\25B8";
+  display: inline-block;
+  width: 14px;
+  color: #9aa0a6;
+  transition: transform 0.15s;
+}
+
+.shortcuts details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.shortcuts table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.shortcuts td {
+  padding: 4px 0;
+  border-top: 1px solid #26282e;
+  vertical-align: middle;
+}
+
+.shortcuts td:first-child {
+  white-space: nowrap;
+  padding-right: 12px;
+}
+
+.shortcuts td:last-child {
+  color: #9aa0a6;
+  text-align: right;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 5px;
+  border: 1px solid #3f434b;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #202227;
+  font: 600 11px/1.5 ui-monospace, Consolas, monospace;
+  text-align: center;
+}
+
+.sep {
+  margin: 0 3px;
+  color: #6b7078;
+}

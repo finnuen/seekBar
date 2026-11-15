@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon-32.png" alt="">
+    <h1>seekBar</h1>
+    <span class="ver" id="ver"></span>
+  </header>
+
+  <div class="section">
+    <div class="row">
+      <span>Enabled</span>
+      <label class="switch">
+        <input type="checkbox" id="enabled">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="row">
+      <span>Enable audio control</span>
+      <label class="switch">
+        <input type="checkbox" id="audioControl">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <p class="hint">Audio control is a little bit buggy: it sets the video&rsquo;s own volume and mute, so a site that keeps a mute icon or volume slider of its own may not redraw it. It is off by default; switch it on to let <kbd>&uarr;</kbd> <kbd>&darr;</kbd> <kbd>M</kbd> control the video.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="row">
+      <span>Speed</span>
+      <output id="speedOut" for="speed">Default</output>
+    </div>
+    <input type="range" id="speed" min="0.25" max="4" step="0.05" value="1">
+    <div class="speed-foot">
+      <span>10% per <kbd>-</kbd> / <kbd>=</kbd></span>
+      <button class="link" id="resetSpeed" type="button">Reset to 1x</button>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="row"><span>Bar color</span></div>
+    <div class="swatches" id="swatches"></div>
+    <button class="custom" id="customBtn" title="Pick any color">
+      <span class="dot" id="customDot"></span>
+      <span id="customLabel">Custom color...</span>
+      <span class="hex" id="customHex"></span>
+    </button>
+    <input type="color" id="customColor">
+    <div class="preview"><div class="bar"><div class="fill" id="previewFill"></div></div></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="row">
+      <span>Site lists</span>
+      <select id="mode">
+        <option value="blacklist">Blacklist</option>
+        <option value="whitelist">Whitelist</option>
+      </select>
+    </div>
+
+    <input id="addInput" type="text" placeholder="Add a website..." spellcheck="false">
+    <button id="siteBtn"></button>
+    <p class="hint" id="hint"></p>
+
+    <div id="siteList" hidden></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section shortcuts">
+    <details>
+      <summary>Shortcuts</summary>
+      <table>
+        <tr><td><kbd>Space</kbd><span class="sep">/</span><kbd>P</kbd></td><td>Play / pause</td></tr>
+        <tr><td><kbd>&larr;</kbd><span class="sep">/</span><kbd>&rarr;</kbd></td><td>Seek 3s</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>&larr;</kbd><span class="sep">/</span><kbd>&rarr;</kbd></td><td>Seek 30s</td></tr>
+        <tr><td><kbd>&uarr;</kbd><span class="sep">/</span><kbd>&darr;</kbd></td><td>Volume &plusmn;5% (opt-in)</td></tr>
+        <tr><td><kbd>M</kbd></td><td>Mute / unmute (opt-in)</td></tr>
+        <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
+        <tr><td><kbd>-</kbd><span class="sep">/</span><kbd>=</kbd></td><td>Speed &plusmn;10%</td></tr>
+        <tr><td><kbd>0</kbd></td><td>Speed back to 1x</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>`</kbd></td><td>Reset speed</td></tr>
+      </table>
+    </details>
+  </div>
+
+  <p class="hint footer">Works on every website, including videos inside shadow DOM and iframes. &ldquo;Default&rdquo; keeps the site&rsquo;s own speed.</p>
+
+  <script src="popup.js"></script>
+</body>
+</html>
