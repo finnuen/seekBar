@@ -30,6 +30,7 @@ seekBar works on **every website**, not a fixed list, and is built to reach vide
 | `tools/make-icon.ps1` | Builds the icons from geometry (wifiForce tile: blue gradient, white mark) |
 | `tools/make-key.js` | Creates `key.pem` on first build |
 | `tools/build.ps1` | Builds `build/seekBar_v<version>.zip` and `.crx` |
+| `docs/` | Screenshots the README references by relative path, never by a `user-attachments` URL |
 | `README.md`, `RELEASE_NOTES.md` | User-facing docs |
 
 No bundler, dependency or test framework. `extension/` is loaded as-is.

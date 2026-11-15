@@ -3,8 +3,8 @@
 Keyboard video controls and a progress line, on every website — a Chromium extension.
 
 Any page, any site: press a key and the video under your cursor responds, without hunting for the player's own controls. While a video plays, a thin line at the very bottom of the window shows how far along it is. Videos inside shadow DOM — even closed shadow roots — and inside iframes are found too, because the script runs in the page's own JavaScript world and wraps `attachShadow` before any site code does.
-<img width="686" height="616" alt="PepperSnap_262-stitch_7" src="https://github.com/user-attachments/assets/5a9be622-e393-4915-a78f-b8a32b3c15aa" />
 
+![The seekBar popup and its shortcut list](docs/seekbar-popup.png)
 
 ## Shortcuts
 
