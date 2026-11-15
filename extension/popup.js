@@ -1,4 +1,11 @@
-const DEFAULTS = { enabled: true, color: '#00FF26', mode: 'blacklist', whitelist: [], blacklist: [], history: [], audioControl: false };
+const DEFAULTS = {
+  enabled: true, color: '#00FF26', mode: 'blacklist', whitelist: [], blacklist: [], history: [],
+  audioControl: false,
+  controlGif: true, controlVideo: true,
+  lineGif: true, lineVideo: true,
+  maxLines: 2,
+  seekGif: 2, seekVideo: 3,
+};
 
 // Five fixed presets; the first one is the green from the extension's default
 // line color. Custom colors picked with the picker land in the row below.
@@ -12,6 +19,13 @@ const PRESETS = [
 
 const enabledEl = document.getElementById('enabled');
 const audioControlEl = document.getElementById('audioControl');
+const controlGifEl = document.getElementById('controlGif');
+const controlVideoEl = document.getElementById('controlVideo');
+const lineGifEl = document.getElementById('lineGif');
+const lineVideoEl = document.getElementById('lineVideo');
+const maxLinesEl = document.getElementById('maxLines');
+const seekGifEl = document.getElementById('seekGif');
+const seekVideoEl = document.getElementById('seekVideo');
 const speedEl = document.getElementById('speed');
 const speedOut = document.getElementById('speedOut');
 const resetSpeed = document.getElementById('resetSpeed');
@@ -276,6 +290,7 @@ async function init() {
 
   enabledEl.checked = settings.enabled;
   audioControlEl.checked = settings.audioControl === true;
+  renderKinds(settings);
   modeEl.value = settings.mode;
   renderSpeed(rate);
 
@@ -301,6 +316,7 @@ function refresh() {
     }
     enabledEl.checked = settings.enabled;
     audioControlEl.checked = settings.audioControl === true;
+    renderKinds(settings);
     modeEl.value = settings.mode;
     renderSpeed(rate);
     renderSwatches(settings);
@@ -308,6 +324,44 @@ function refresh() {
     renderPreview(settings);
     if (siteHost) updateSiteButton(settings);
     renderList(settings);
+  });
+}
+
+// Per-kind switches and the two numbers. Everything here defaults to "on" and
+// to the values the extension shipped with, so a fresh install behaves as
+// before: GIFs and videos are both controlled, both get a line, at most two
+// lines, 2 s per arrow press on a GIF and 3 s on a video.
+const KINDS = [
+  ['controlGif', controlGifEl],
+  ['controlVideo', controlVideoEl],
+  ['lineGif', lineGifEl],
+  ['lineVideo', lineVideoEl],
+];
+
+const NUMBERS = [
+  ['maxLines', maxLinesEl, 0, 20],
+  ['seekGif', seekGifEl, 1, 60],
+  ['seekVideo', seekVideoEl, 1, 60],
+];
+
+function renderKinds(settings) {
+  for (const [key, el] of KINDS) el.checked = settings[key] !== false;
+  for (const [key, el, lo, hi] of NUMBERS) {
+    const n = Number(settings[key]);
+    el.value = String(isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : DEFAULTS[key]);
+  }
+}
+
+for (const [key, el] of KINDS) {
+  el.addEventListener('change', async () => { await save({ [key]: el.checked }); });
+}
+
+for (const [key, el, lo, hi] of NUMBERS) {
+  el.addEventListener('change', async () => {
+    const n = Number(el.value);
+    const value = isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : DEFAULTS[key];
+    el.value = String(value);
+    await save({ [key]: value });
   });
 }
 

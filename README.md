@@ -11,7 +11,7 @@ Any page, any site: press a key and the video under your cursor responds, withou
 | Key | Action |
 | --- | --- |
 | `Space` / `P` | Play / pause |
-| `←` / `→` | Seek back / forward 3 s |
+| `←` / `→` | Seek back / forward — 2 s on a GIF, 3 s on a video (configurable) |
 | `Ctrl` + `←` / `→` | Seek back / forward 30 s |
 | `↑` / `↓` | Volume up / down (needs *Enable audio control*) |
 | `M` | Mute / unmute (needs *Enable audio control*) |
@@ -38,6 +38,10 @@ The toolbar button opens a small popup:
 
 - **Enabled** — the global on/off switch. Turning it off stops both the shortcuts and the line.
 - **Enable audio control** — off by default. Switch it on to let `↑`, `↓` and `M` set the video's volume and mute; leave it off and those three keys stay with the site. See *Behavior* below.
+- **Shortcut control for** — which kinds the keys act on: *GIF* and *Video*, both on by default. Turn *GIF* off to leave a GIF to the site and have the keys act on a video instead.
+- **Progress line for** — which kinds get a line: *GIF* and *Video*, both on by default. Turn one off if you want the keys without the line (or the line without the keys).
+- **Max progress lines** — how many lines may be on screen at once, 2 by default. The clip the shortcuts act on always keeps its line, and the rest of the budget goes to the most recently started clips, so a feed that autoplays a dozen videos shows the ones you just got to. 0 turns every line off.
+- **Jump forward on GIF** / **Jump forward on video** — seconds per plain `←`/`→` press, 2 s and 3 s by default. `Ctrl` + arrow always jumps 30 s.
 - **Speed** — the saved playback speed, 0.25x–4x. The slider sets it directly; `-` and `=` change it by 10% per press. *Reset to 1x* clears the saved speed, so each site's own default is used again.
 - **Bar color** — five presets plus a *Custom color...* picker that recolors the lines live while you drag. The row below keeps your five most recently used custom colors.
 - **Site lists** — choose how the per-site list behaves:
@@ -57,8 +61,9 @@ The **Shortcuts** section shows the same key table as above.
 - **Typing is safe:** shortcuts are ignored in text fields and editable areas.
 - **Paused stays paused:** a video you pause with the keys is not resumed by the site on its own, for example when you switch away and back to the tab. It plays again when you start it (key or click) or when the site loads a new video into the player.
 - **Only the keys used are intercepted:** anything else passes through to the site.
-- **The line:** one line per video that has started playing, stacked upward with the newest at the bottom. A paused video keeps its line frozen while it is on screen. A live stream has no progress, so it shows a dim line with a sliding segment. Fullscreen hides the lines. GIFs, APNGs, canvas and CSS animations never get a line — only real `<video>` elements count, and a GIF that a site ships as a short silent `<video>` loop (Discord, Reddit comment sections) is recognised and skipped.
-- **Multiple videos:** each playing video gets its own line; the shortcuts act on the one under the cursor, or the most visible one.
+- **The line:** one line per clip that has started playing, stacked upward with the most recently started clip at the bottom edge, up to *Max progress lines* (2 by default). A paused clip keeps its line frozen while it is on screen. A live stream has no progress, so it shows a dim line with a sliding segment. Fullscreen hides the lines. GIFs, APNGs, canvas and CSS animations never get a line — only real `<video>` elements count.
+- **GIF or video:** a clip counts as a GIF when its file name ends in `.gif`, `.webp` or `.apng`, which is how Reddit and others ship a GIF as an MP4 — the payload is a video, the name is not. Everything else is a video. The two kinds have their own switches for keys and lines, and their own jump distance.
+- **Multiple clips:** each playing clip gets its own line; the shortcuts act on the one under the cursor, or the most visible one.
 
 ## How it works
 
@@ -121,7 +126,7 @@ The build keeps the version in the file name; the release attaches the same file
 - Fullscreen uses the raw video element, so the site's own controls are not shown while in fullscreen.
 - Speed changes made through a site's own menu are not saved; only the keys and the popup are.
 - When a site resumes a video we paused, its play briefly starts before it is paused again, so a very short audio blip or UI flicker is possible.
-- A short, silent clip in a player with no native controls counts as a GIF and gets no line. Telling a GIF served as a video from a real video can only go by the clip itself: it has no audio track. Anything with sound is always treated as a video.
+- A clip is told apart by its file name only. A GIF re-encoded under a name that does not end in `.gif`/`.webp`/`.apng` counts as a video, and a real video served under a `.gif` name counts as a GIF — the file itself is not inspected.
 - After updating the extension, reload any tab whose keys or line stop responding; its old copy keeps running until then.
 
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the version history.

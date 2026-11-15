@@ -38,6 +38,38 @@
 
   <div class="section">
     <div class="row">
+      <span>Shortcut control for</span>
+      <span class="checks">
+        <label><input type="checkbox" id="controlGif"> GIF</label>
+        <label><input type="checkbox" id="controlVideo"> Video</label>
+      </span>
+    </div>
+    <div class="row">
+      <span>Progress line for</span>
+      <span class="checks">
+        <label><input type="checkbox" id="lineGif"> GIF</label>
+        <label><input type="checkbox" id="lineVideo"> Video</label>
+      </span>
+    </div>
+    <div class="row">
+      <span>Max progress lines</span>
+      <input class="num" type="number" id="maxLines" min="0" max="20" step="1" value="2">
+    </div>
+    <div class="row">
+      <span>Jump forward on GIF</span>
+      <span class="numwrap"><input class="num" type="number" id="seekGif" min="1" max="60" step="1" value="2"><span class="unit">s</span></span>
+    </div>
+    <div class="row">
+      <span>Jump forward on video</span>
+      <span class="numwrap"><input class="num" type="number" id="seekVideo" min="1" max="60" step="1" value="3"><span class="unit">s</span></span>
+    </div>
+    <p class="hint">A GIF is a clip whose file name ends in <code>.gif</code>, <code>.webp</code> or <code>.apng</code>, which is how Reddit and others ship them as video. <kbd>Ctrl</kbd> + <kbd>&larr;</kbd> / <kbd>&rarr;</kbd> always jumps 30 s.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="row">
       <span>Speed</span>
       <output id="speedOut" for="speed">Default</output>
     </div>

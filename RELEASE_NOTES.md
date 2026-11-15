@@ -1,5 +1,16 @@
 # Release notes
 
+## v1.2
+
+The automatic GIF handling from 1.1 is gone — it misfired on real videos — and is replaced by four settings, all on by default so nothing changes for anyone who does not open the popup.
+
+- A clip counts as a GIF when its file name ends in `.gif`, `.webp` or `.apng`, which is how Reddit serves one (an MP4 payload under the original name). Everything else is a video. Nothing about the media is sniffed.
+- **Shortcut control for** — GIF and Video, both on. Turn one off to leave that kind to the site while the keys act on the other.
+- **Progress line for** — GIF and Video, both on, so you can have the line without the keys or the keys without the line.
+- **Max progress lines** — 2 by default. The clip the shortcuts act on always keeps its line, so pressing Space always moves something you can see; the rest of the budget goes to the most recently started clips, and the newest of them sits at the bottom edge. 0 turns every line off.
+- **Jump forward on GIF** (2 s) and **on video** (3 s) — the plain `←`/`→` step, per kind. `Ctrl` + arrow still jumps 30 s.
+- The speed fix from 1.1 stays: two quick presses no longer make the speed jump back to the older value while the change is being saved.
+
 ## v1.1
 
 - GIFs that sites ship as short silent `<video>` loops — Discord messages, Reddit comment sections — no longer get a progress line, and the shortcuts skip them. A short looping clip that has sound is still a video and keeps its line.

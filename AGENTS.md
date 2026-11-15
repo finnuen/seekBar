@@ -37,7 +37,7 @@ No bundler, dependency or test framework. `extension/` is loaded as-is.
 
 ## Design rules (don't break these)
 
-1. **Works on every site.** No site selectors or class names; only standard `<video>` behavior, plus Chromium's decoded-audio counter for telling a GIF from a video (see *GIFs that arrive as videos*). `manifest.json` matches `<all_urls>`, all frames.
+1. **Works on every site.** No site selectors or class names; only standard `<video>` behavior, and the source file name to tell a GIF from a video (see *GIFs that arrive as videos*). `manifest.json` matches `<all_urls>`, all frames.
 2. **Two worlds, one job each.** Storage and CSS injection live in the isolated world (`content.js`); DOM discovery and key handling live in the page world (`main.js`). Page-world code cannot call `chrome.storage`; don't try.
 3. **Minimal interference.** A key is swallowed (`preventDefault` + `stopImmediatePropagation`) only when a video is on screen and the extension acted on that key. Everything else passes through. With *Enable audio control* on, `↑`/`↓` are volume while a video is on screen, so they stop scrolling there; with no video on screen, or the switch off, they scroll normally. `Ctrl`+`↑`/`↓` is left to the browser.
 4. **Audio control is a gate, and it is off until it is switched on.** `↑`/`↓`/`M` set `video.volume` / `video.muted` on the target video and nowhere else. Never store a volume, never re-apply one on `loadedmetadata`/`play`, never unmute on page load, no *Enable audio at start*. This deliberately works below the site: a player that keeps its own mute flag or level will not redraw its icon or slider, which is why `settings.audioControl` (popup: *Enable audio control*, default off) gates the three keys — while it is off they return `false` from `handle()` and the site gets them untouched. Do not reintroduce control-clicking heuristics for mute or level: that path was tried, is unreliable across players, and was rejected.
@@ -66,11 +66,13 @@ Each push also carries `seq`, a counter for that frame's pushes, and `own`, true
 ## Storage
 
 - Settings — `chrome.storage.sync`, with a local fallback:
-  `{ enabled, color, mode, whitelist[], blacklist[], history[], audioControl }`
+  `{ enabled, color, mode, whitelist[], blacklist[], history[], audioControl, controlGif, controlVideo, lineGif, lineVideo, maxLines, seekGif, seekVideo }`
   If sync refuses writes, the popup writes to `local` with `__storeMode: 'local'` and both readers prefer the local copy. Keep this rule in both `content.js` and `popup.js`.
 - Speed — `chrome.storage.local` under `carry`:
   `{ rate, src }`
   `rate` absent/`null` means "no saved speed — use the site's default". `src` is a writer id (`content`'s `PAGE_ID` or `'popup'`).
+
+Defaults: `audioControl: false`; `controlGif`/`controlVideo`/`lineGif`/`lineVideo`: true; `maxLines: 2`; `seekGif: 2`, `seekVideo: 3`. The four per-kind switches are read with `!== false` so a missing key means "on", and the numbers are validated in the popup (`maxLines` 0–20, the jumps 1–60 s) and again in `main.js` (`seekStep()` falls back to the default).
 
 Volume and mute are **not** stored anywhere: `audioControl` switches the keys on or off, it does not remember a level.
 
@@ -86,15 +88,16 @@ Volume and mute are **not** stored anywhere: `audioControl` switches the keys on
 
 ### GIFs that arrive as videos
 
-- Discord, Reddit comment sections and other feeds ship GIFs as short, silent, looping MP4/WebM inside a plain `<video>`, so the tag cannot tell them from a video. `gifState()` decides, using only standard properties: no native `controls`, and either `loop` or a duration of at most `GIF_MAX` (8 s), and **no audio track at all**.
-- The audio track is the discriminator. `captureStream().getAudioTracks()` answers it exactly but throws `SecurityError` for cross-origin media, which is how a CDN serves these clips, so `webkitAudioDecodedByteCount` is used instead: a clip with audio decodes bytes within ~80 ms of playback (muted or not), one without never does.
-- Until that is settled the clip is treated as a GIF and gets no line; a real clip's line appears a fraction of a second after it starts. An unsettled *playing* clip keeps the render loop awake, a paused one waits for its own play event.
-- A settled GIF is skipped by `getTargetVideo()` (fullscreen, hovered and most-visible paths), so the keys act on a real video instead. `loadstart` resets both flags: a new source in the same element is a new clip.
+- Reddit and others ship a GIF as an MP4, but keep the original file name: the path still ends in `.gif` (Reddit's proxy serves `…/xxxx.gif?width=356&format=mp4`). Animated WebP and APNG keep `.webp`/`.apng`. `isGif(v, entry)` tests `GIF_PATH_RE` against `new URL(src).pathname`, once per source (`entry.gif`, cleared on `loadstart`); `blob:`/`data:` sources have no name and count as videos.
+- That is the whole test — deliberately. Audio-track sniffing (`webkitAudioDecodedByteCount`), loop/duration heuristics and a host blacklist were all tried and dropped: they misfired on real videos, on silent ones and on Reddit's own MP4s, and none of it was needed once the file name settled the question.
+- The kind decides three things, each with its own switch in the popup: `controllable()` (`controlGif`/`controlVideo`) gates `getTargetVideo()`; `lineWanted()` (`lineGif`/`lineVideo`) gates the overlay; `seekStep()` picks the plain-arrow distance (`seekGif`/`seekVideo`). `Ctrl`+arrows is always `SEEK_LONG` (30 s).
+- A clip with no line still participates in nothing else: it is simply skipped before `makeLine()`.
 
 ### Overlay
 
 - `#seekbar-overlay-root` is a fixed, zero-height, `pointer-events: none` element at the bottom; its styles live in `content.js` and are injected by that script (page CSP does not apply to content-script CSS).
-- One `.sb-line` per video that has started playing. Height 2 px, stacked with a 3 px stride; newest discovered at the bottom. A GIF that arrives as a `<video>` never gets one (see above).
+- One `.sb-line` per clip that has started playing and whose kind is switched on (`lineWanted()`). Height 2 px, stacked with a 3 px stride; the most recently started clip is at the bottom edge, older ones above it (`startedAt` order, not discovery order).
+- At most `maxLines` (default 2) are shown at once. The clip the keys act on (`getTargetVideo()`) always keeps its line — pressing Space on a clip whose line was the one dropped reads as broken — and the rest of the budget goes to the most recently started clips (`entry.startedAt`). `maxLines: 0` turns every line off.
 - Determinate video: `transform: scaleX(currentTime / duration)`.
 - Live stream playing: dim track + sliding `.sb-glide`; paused live: dim static line.
 - A paused video keeps its frozen line only while it is on screen. A video that never played shows nothing.
@@ -106,6 +109,8 @@ Volume and mute are **not** stored anywhere: `audioControl` switches the keys on
 2. Hovered: `pointermove` remembers the last mouse position; the video whose client rect contains it. Uses `tracked`, not `elementsFromPoint`, so closed-shadow videos participate.
 3. Most visible: viewport-intersection area, weighted 1.5x when playing.
 
+All three skip a clip whose kind is switched off: `controllable()` returns `controlGif`/`controlVideo` by kind.
+
 ### Key handling
 
 - One `keydown` on `window` in the capture phase, plus a matching `keyup` that swallows the same `code` (stops a focused button from being "clicked" by Space).
@@ -113,6 +118,7 @@ Volume and mute are **not** stored anywhere: `audioControl` switches the keys on
 - `handle()` returns true only when it acted; only then is the event blocked.
 - Toggles (Space/P, F, `M`, reset) ignore key repeat; seeking, speed and volume allow it, so holding a key ramps.
 - `0` is speed 1x; Ctrl+`0` is *not* used, so browser zoom reset keeps working.
+- Seek: a plain `←`/`→` uses `seekStep(v)` — `seekGif` (2 s) for a GIF, `seekVideo` (3 s) for a video — while `Ctrl`+arrow is always `SEEK_LONG` (30 s). Values are validated in the popup and fall back to the defaults here.
 - Speed: `RATE_STEP = 0.1`, `RATE_MIN = 0.25`, `RATE_MAX = 4`, values rounded to 2 decimals.
 - Volume: `VOLUME_STEP = 0.05`, clamped to 0–1 and rounded to 2 decimals. `volumeBy()` unmutes only when raising; lowering a muted video keeps it muted. A video muted by its site usually still carries volume 1, so the unmuting press caps the level at `UNMUTE_CAP` (0.5) before stepping, instead of jumping to full blast; a video muted with the keys keeps the level it had.
 - `settings.audioControl` (popup switch *Enable audio control*, **default off**) gates the `ArrowUp`/`ArrowDown`/`M` cases in `handle()`: while it is off they return `false`, so the key falls through to the page — `↑`/`↓` scroll and `M` does whatever the site does with it. The popup writes it with the other settings; `content.js` relays it in every push.
@@ -149,13 +155,15 @@ Load `extension/` from `chrome://extensions` (Developer mode, *Load unpacked*), 
 3. Typing in a comment box or search field does not trigger anything.
 4. Volume (with *Enable audio control* on): `↑`/`↓` move the target video 5% per press, holding them ramps, `M` mutes and unmutes; one press up from a muted video lands around 50%, not at full blast. Scroll to the next video and confirm the volume did **not** follow; reload and confirm nothing was remembered. With no video on screen, or the switch off, `↑`/`↓` scroll the page.
 5. Popup switch *Enable audio control*: it starts off, so `↑`/`↓` must scroll the page and `M` must do nothing to the video. Switch it on and they control the video; switch it off and they go back to the site. The switch must survive a reload.
-6. A GIF in a Discord message or a Reddit comment section — shipped as a silent looping `<video>` — gets **no** line, and the shortcuts skip it; a short looping clip that has sound keeps its line. A muted Instagram reel (looping, no native controls) must keep its line too: it has an audio track.
-7. A paused video stays paused after switching tabs and back (Instagram is the useful test).
-8. The line matches the video's progress, stacks for several videos, hides in fullscreen, and stays put when paused.
-9. A site whose player is a web component (shadow DOM) is controlled; test a closed root if you can.
-10. A video inside an iframe responds while the frame has focus.
-11. Popup: enable/disable, the audio switch, speed slider and reset, color presets/custom, site lists. The speed slider moves while the keyboard changes speed.
-12. After an extension reload, open tabs either keep working (old main.js) or are re-injected; a tab that misbehaves should be reloaded.
+6. Kinds: a clip whose file name ends `.gif`/`.webp`/`.apng` is a GIF; anything else is a video. On Reddit, a comment GIF (`…/xxxx.gif?format=mp4`) and a real video (`….mp4`) must be treated differently. Uncheck *Progress line for → GIF* and only videos keep lines; uncheck *Shortcut control for → GIF* and the keys act on a video while the GIF plays on untouched. Both come back when re-checked.
+7. *Max progress lines*: play two clips at once and confirm two lines; set it to 1 and one line remains (the most recently started); set 0 and none. Two playing clips must never leave a stale third line behind.
+8. *Jump forward on GIF* / *on video*: a plain `←`/`→` moves by the clip's own number (2 s and 3 s by default); change one and confirm only that kind changes; `Ctrl`+arrow still jumps 30 s.
+9. A paused video stays paused after switching tabs and back (Instagram is the useful test).
+10. The line matches the video's progress, stacks for several videos, hides in fullscreen, and stays put when paused.
+11. A site whose player is a web component (shadow DOM) is controlled; test a closed root if you can.
+12. A video inside an iframe responds while the frame has focus.
+13. Popup: enable/disable, the audio switch, the four per-kind switches, the three numbers, speed slider and reset, color presets/custom, site lists. The speed slider moves while the keyboard changes speed, and every setting survives a reload.
+14. After an extension reload, open tabs either keep working (old main.js) or are re-injected; a tab that misbehaves should be reloaded.
 
 There is no committed automated test. A throwaway smoke test can load the unpacked extension into headless Edge over CDP and drive synthetic keydown events; it is worth doing after changes to `main.js`.
 
@@ -194,5 +202,6 @@ There is no committed automated test. A throwaway smoke test can load the unpack
 - Fullscreen uses the raw video element, so the site's controls are not shown.
 - Changes made in a site's own speed menu are not saved.
 - Resuming a video we paused can produce a brief audio blip before it is paused again.
-- A short, silent clip in a player without native controls is taken for a GIF and gets no line. That is the price of recognising a GIF that arrives as a video; a clip with any audio track is always treated as a video.
+- A clip's kind comes from its file name alone. A GIF re-encoded under another name counts as a video, and a real video served under a `.gif` name counts as a GIF; the bytes are never inspected.
+- A clip whose kind has *Progress line for* switched off still exists as far as the keys are concerned (if its control switch is on) — that is the point of two separate switches.
 - Audio control is a gate, so a player that keeps a mute icon or volume slider of its own will not redraw it, and the site may keep sounding muted while the element is not (Instagram, Threads, Facebook). That is expected, is stated in the popup and the README, and is why the gate is off by default behind *Enable audio control*.

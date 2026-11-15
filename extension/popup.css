@@ -400,6 +400,68 @@ kbd {
   text-align: center;
 }
 
+/* Per-kind checkboxes and small number fields */
+.checks {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #cfd3da;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checks input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #518CF2;
+  cursor: pointer;
+}
+
+.numwrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.num {
+  width: 52px;
+  padding: 4px 6px;
+  border: 1px solid #3f434b;
+  border-radius: 6px;
+  background: #202227;
+  color: #e6e8eb;
+  font: 12px/1.4 ui-monospace, Consolas, monospace;
+  text-align: center;
+}
+
+.num:focus {
+  outline: none;
+  border-color: #518CF2;
+}
+
+.unit {
+  font-size: 11px;
+  color: #9aa0a6;
+}
+
+code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #202227;
+  font: 11px ui-monospace, Consolas, monospace;
+  color: #cfd3da;
+}
+
 .sep {
   margin: 0 3px;
   color: #6b7078;

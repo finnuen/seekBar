@@ -23,7 +23,14 @@
     try { previous.dispose(); } catch {}
   }
 
-  const DEFAULTS = { enabled: true, color: '#00FF26', mode: 'blacklist', whitelist: [], blacklist: [], history: [], audioControl: false };
+  const DEFAULTS = {
+    enabled: true, color: '#00FF26', mode: 'blacklist', whitelist: [], blacklist: [], history: [],
+    audioControl: false,
+    controlGif: true, controlVideo: true,
+    lineGif: true, lineVideo: true,
+    maxLines: 2,
+    seekGif: 2, seekVideo: 3,
+  };
   const host = location.hostname.replace(/^www\./, '');
 
   // Identifies this frame's writes, so the storage echo of our own write is not
@@ -112,6 +119,13 @@
           whitelist: s.whitelist,
           blacklist: s.blacklist,
           audioControl: s.audioControl === true,
+          controlGif: s.controlGif !== false,
+          controlVideo: s.controlVideo !== false,
+          lineGif: s.lineGif !== false,
+          lineVideo: s.lineVideo !== false,
+          maxLines: s.maxLines,
+          seekGif: s.seekGif,
+          seekVideo: s.seekVideo,
         },
         siteActive: s.enabled !== false &&
           computeSiteActive(s.mode || 'blacklist', s.whitelist || [], s.blacklist || []),

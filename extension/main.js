@@ -13,9 +13,7 @@
 //      A paused video keeps its line, frozen, while it is on screen. A live
 //      stream has no progress, so it shows a dim line with a sliding segment.
 //      Fullscreen hides the lines. Only HTMLVideoElement counts: GIFs, APNGs,
-//      canvas and CSS animations are not videos - and neither is a GIF that a
-//      site ships as a short silent <video> loop, which is how Discord and
-//      Reddit deliver them (see gifState()).
+//      canvas and CSS animations are not videos.
 //
 //   2. The keyboard. Play/pause, seek, volume, mute, speed and fullscreen for
 //      the video the user means: the fullscreen one, else the one under the
@@ -44,7 +42,6 @@
   if (window.__seekBarMain) return;
   window.__seekBarMain = true;
 
-  const SEEK_SHORT = 3;      // seconds on a plain arrow key
   const SEEK_LONG = 30;      // seconds with Ctrl
   const RATE_STEP = 0.1;     // one press of - or = is 10%
   const RATE_MIN = 0.25;
@@ -52,14 +49,25 @@
   const VOLUME_STEP = 0.05;  // one press of Up or Down is 5%
   const SETTLE_MS = 3000;    // correct player resets this long after a video starts
   const INPUT_MS = 1000;     // a play this soon after real input is the user's choice
-  const GIF_GRACE = 0.5;     // seconds of playback before a silent loop is taken for a GIF
-  const GIF_MAX = 8;         // a silent clip no longer than this is a GIF, not a video
+
+  // A GIF shipped as a video: the transcoded file keeps the original name, so
+  // the path still ends in .gif (Reddit's proxy serves
+  // ".../xxxx.gif?width=356&format=mp4"), and an animated WebP or APNG keeps
+  // .webp/.apng. That is the whole test - no audio sniffing, no host list.
+  const GIF_PATH_RE = /\.(gif|webp|apng)$/i;
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const round2 = (v) => Math.round(v * 100) / 100;
 
   // --- settings, relayed from the isolated world ---------------------------
-  const DEFAULTS = { enabled: true, color: '#00FF26', mode: 'blacklist', whitelist: [], blacklist: [], audioControl: false };
+  const DEFAULTS = {
+    enabled: true, color: '#00FF26', mode: 'blacklist', whitelist: [], blacklist: [],
+    audioControl: false,
+    controlGif: true, controlVideo: true,     // which kinds the keys act on
+    lineGif: true, lineVideo: true,           // which kinds get a progress line
+    maxLines: 2,                              // lines on screen at once (0 = none)
+    seekGif: 2, seekVideo: 3,                 // seconds per plain arrow key
+  };
   const COLOR_RE = /^#[0-9a-f]{6}$/i;
   const settings = { ...DEFAULTS };
   let siteActive = true;
@@ -88,7 +96,7 @@
       // already on the video; adopting it would walk the speed backwards
       // through every press until the last echo arrived.
       const nextRate = d.own === true
-        ? carryRate                                  // our own write, already applied
+        ? carryRate
         : (typeof d.rate === 'number' && isFinite(d.rate)
             ? round2(clamp(d.rate, RATE_MIN, RATE_MAX))
             : null);
@@ -239,53 +247,31 @@
   // --- tracking ------------------------------------------------------------
   const tracked = new Map(); // HTMLVideoElement -> entry
 
-  // A GIF served as a video: Discord, Reddit and others ship GIFs as short
-  // silent MP4/WebM loops in a plain <video>, so the tag alone cannot tell them
-  // from a video. Three standard things can:
-  //
-  //   - it loops, and it has no native controls of its own; and
-  //   - it is short (a GIF is a few seconds), or loops outright; and
-  //   - it carries no audio track at all.
-  //
-  // Only the last one is hard to see. captureStream() would answer it exactly,
-  // but it throws a SecurityError for cross-origin media - which is how a CDN
-  // serves these clips - so the answer comes from Chromium's decoded-byte
-  // counter instead: a clip with an audio track decodes audio within ~80 ms of
-  // playback, even while muted, and one without an audio track never does.
-  //
-  // Until that is settled the clip is treated as a GIF, so a GIF never gets a
-  // line; a real clip's line appears a fraction of a second after it starts.
-  // 0 = a real video, 1 = a GIF, -1 = not settled yet.
-  function gifState(v, entry) {
-    if (entry.gif) return 1;
-    if (entry.audio) return 0;
-    if (v.controls) { entry.audio = true; return 0; }          // a player of its own
-    const looping = v.loop === true;
-    const short = isFinite(v.duration) && v.duration > 0 && v.duration <= GIF_MAX;
-    if (!looping && !short) { entry.audio = true; return 0; }
-    const bytes = v.webkitAudioDecodedByteCount;
-    if (typeof bytes !== 'number') { entry.audio = true; return 0; } // no way to tell
-    if (bytes > 0) { entry.audio = true; return 0; }            // it has sound: a video
-    if ((v.currentTime || 0) >= GIF_GRACE) { entry.gif = true; return 1; }
-    return -1;
+  // Is this clip a GIF (or an animated WebP/APNG) rather than a video? Read from
+  // the source URL's file name and cached per source: it is asked once per frame
+  // per clip otherwise. blob: and data: sources have no file name, so they count
+  // as videos.
+  function isGif(v, entry) {
+    if (entry.gif !== null) return entry.gif;
+    const src = v.currentSrc || v.src || '';
+    if (!src || src.startsWith('blob:') || src.startsWith('data:')) return false;
+    let gif = false;
+    try { gif = GIF_PATH_RE.test(new URL(src).pathname); } catch { return false; }
+    entry.gif = gif;
+    return gif;
   }
-
-  const isGif = (v) => {
-    const entry = tracked.get(v);
-    return !!entry && entry.gif === true;
-  };
 
   function track(video) {
     if (!(video instanceof HTMLVideoElement) || tracked.has(video)) return;
-    const entry = { line: null, trackEl: null, glideEl: null, started: false, audio: false, gif: false };
+    const entry = { line: null, trackEl: null, glideEl: null, started: false, gif: null, startedAt: 0 };
     tracked.set(video, entry);
     for (const ev of ['play', 'playing', 'pause', 'ended', 'emptied', 'seeked',
                       'loadedmetadata', 'durationchange', 'ratechange']) {
       video.addEventListener(ev, poke, true);
     }
-    // A new source into the same element is a new clip: forget what the old
-    // one was.
-    video.addEventListener('loadstart', () => { entry.audio = false; entry.gif = false; }, true);
+    // A new source into the same element is a new clip: it may not even be the
+    // same kind.
+    video.addEventListener('loadstart', () => { entry.gif = null; }, true);
     poke();
   }
 
@@ -368,17 +354,14 @@
         if (entry.line && !entry.line.isConnected) ov.appendChild(entry.line); // self-heal
 
         const playing = !video.paused && !video.ended;
-        if (playing) entry.started = true;
-
-        // A GIF is not something to track: no line, and the keys skip it (see
-        // getTargetVideo). A playing clip that is not settled yet keeps the loop
-        // awake until it is; a paused one waits for its own play event.
-        const gif = gifState(video, entry);
-        if (gif !== 0) {
-          hideLine(entry);
-          if (gif < 0 && playing) keepGoing = true;
-          continue;
+        if (playing) {
+          if (!entry.started) entry.startedAt = performance.now();
+          entry.started = true;
         }
+
+        // The popup can switch lines off per kind, so a GIF can be tracked and
+        // controllable without drawing anything for it.
+        if (!lineWanted(video, entry)) { hideLine(entry); continue; }
 
         const rects = video.getClientRects();
         let onscreen = false;
@@ -426,10 +409,36 @@
         shownEntries.push(entry);
         keepGoing = true;                   // started lines need scroll re-checks
       }
-      // Stack upward with the newest discovered video at the bottom.
-      const n = shownEntries.length;
+
+      // At most `maxLines` at once. The clip the keys act on always keeps its
+      // line - pressing Space on a clip whose line was the one dropped reads as
+      // broken - and the rest of the budget goes to the most recently started
+      // clips, so a feed that autoplays a dozen videos shows the ones you just
+      // got to.
+      const max = Math.max(0, Math.round(settings.maxLines));
+      let visible = shownEntries;
+      if (max < shownEntries.length) {
+        const keep = new Set();
+        if (max > 0) {
+          const target = getTargetVideo();
+          const targetEntry = target ? tracked.get(target) : null;
+          if (targetEntry && shownEntries.includes(targetEntry)) keep.add(targetEntry);
+        }
+        const ordered = shownEntries.slice().sort((a, b) => b.startedAt - a.startedAt);
+        for (const entry of ordered) {
+          if (keep.size >= max) break;
+          keep.add(entry);
+        }
+        for (const entry of shownEntries) if (!keep.has(entry)) hideLine(entry);
+        visible = shownEntries.filter((entry) => keep.has(entry));
+      }
+
+      // Stack upward with the most recently started clip at the bottom edge, so
+      // a line appears where the eye already is when something starts playing.
+      const ordered = visible.slice().sort((a, b) => a.startedAt - b.startedAt);
+      const n = ordered.length;
       for (let i = 0; i < n; i++) {
-        shownEntries[i].line.style.bottom = ((n - 1 - i) * STRIDE) + 'px';
+        ordered[i].line.style.bottom = ((n - 1 - i) * STRIDE) + 'px';
       }
       ov.style.display = n ? 'block' : 'none';
     } catch {
@@ -522,7 +531,7 @@
     if (!pointer) return null;
     const under = [];
     for (const v of tracked.keys()) {
-      if (!v.isConnected || isGif(v)) continue;
+      if (!v.isConnected || !controllable(v)) continue;
       const r = v.getBoundingClientRect();
       if (r.width <= 0 || r.height <= 0) continue;
       if (pointer.x >= r.left && pointer.x <= r.right &&
@@ -542,6 +551,20 @@
     return false;
   }
 
+  // Which kinds the keys act on: the popup's two "Shortcut control for"
+  // switches. A GIF can be left alone while videos are controlled, and the
+  // other way round.
+  function controllable(v) {
+    const entry = tracked.get(v);
+    if (!entry) return true;
+    return isGif(v, entry) ? settings.controlGif : settings.controlVideo;
+  }
+
+  // Which kinds get a progress line (the cap is applied in tick).
+  function lineWanted(v, entry) {
+    return isGif(v, entry) ? settings.lineGif : settings.lineVideo;
+  }
+
   // Priority: fullscreen video, then the video under the cursor, then the most
   // visible one. If nothing is tracked yet (late install), one last scan.
   function getTargetVideo() {
@@ -549,9 +572,9 @@
 
     const fs = document.fullscreenElement;
     if (fs) {
-      if (fs.tagName === 'VIDEO' && !isGif(fs)) return fs;
+      if (fs.tagName === 'VIDEO' && controllable(fs)) return fs;
       for (const v of tracked.keys()) {
-        if (v.isConnected && !isGif(v) && withinHost(v, fs)) return v;
+        if (v.isConnected && controllable(v) && withinHost(v, fs)) return v;
       }
     }
 
@@ -563,7 +586,7 @@
     const vw = window.innerWidth || document.documentElement.clientWidth;
     const vh = window.innerHeight || document.documentElement.clientHeight;
     for (const v of tracked.keys()) {
-      if (!v.isConnected || isGif(v)) continue;
+      if (!v.isConnected || !controllable(v)) continue;
       const r = v.getBoundingClientRect();
       const w = Math.min(r.right, vw) - Math.max(r.left, 0);
       const h = Math.min(r.bottom, vh) - Math.max(r.top, 0);
@@ -581,6 +604,15 @@
   function seek(v, delta) {
     if (!isFinite(v.duration) || v.duration <= 0) return;
     v.currentTime = clamp(v.currentTime + delta, 0, v.duration);
+  }
+
+  // A plain arrow key jumps by the clip's own setting: a looping GIF is short,
+  // so 2 s is a big step, while a video gets the familiar 3 s.
+  function seekStep(v) {
+    const entry = tracked.get(v);
+    const gif = entry ? isGif(v, entry) : false;
+    const n = Number(gif ? settings.seekGif : settings.seekVideo);
+    return isFinite(n) && n > 0 ? n : (gif ? DEFAULTS.seekGif : DEFAULTS.seekVideo);
   }
 
   // --- volume --------------------------------------------------------------
@@ -640,10 +672,10 @@
         }
         return true;
       case 'ArrowLeft':
-        seek(v, -(ctrl ? SEEK_LONG : SEEK_SHORT));
+        seek(v, -(ctrl ? SEEK_LONG : seekStep(v)));
         return true;
       case 'ArrowRight':
-        seek(v, ctrl ? SEEK_LONG : SEEK_SHORT);
+        seek(v, ctrl ? SEEK_LONG : seekStep(v));
         return true;
       case 'ArrowUp':
         if (!settings.audioControl) return false;
