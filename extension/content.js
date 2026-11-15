@@ -87,9 +87,10 @@
 
   // Pushes can overlap - a fast pair of key presses starts two storage reads,
   // and the older one can finish last. The sequence lets the page world drop a
-  // push it has already seen past, and a push that follows our own write sends
-  // the value we just wrote instead of re-reading it, so an overlapping read
-  // cannot hand back the rate from one press ago.
+  // push it has already seen past, and a push that follows our own write is
+  // marked `own`: it carries the rate this frame wrote, which the page world
+  // already applied, so re-applying it would drag the speed backwards until the
+  // last echo lands.
   let seq = 0;
 
   function push(rateOverride) {
@@ -103,6 +104,7 @@
         type: 'settings',
         id: PAGE_ID,
         seq: ++seq,
+        own: rateOverride !== undefined,
         settings: {
           enabled: s.enabled !== false,
           color: s.color,

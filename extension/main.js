@@ -13,7 +13,9 @@
 //      A paused video keeps its line, frozen, while it is on screen. A live
 //      stream has no progress, so it shows a dim line with a sliding segment.
 //      Fullscreen hides the lines. Only HTMLVideoElement counts: GIFs, APNGs,
-//      canvas and CSS animations are not videos.
+//      canvas and CSS animations are not videos - and neither is a GIF that a
+//      site ships as a short silent <video> loop, which is how Discord and
+//      Reddit deliver them (see gifState()).
 //
 //   2. The keyboard. Play/pause, seek, volume, mute, speed and fullscreen for
 //      the video the user means: the fullscreen one, else the one under the
@@ -50,6 +52,8 @@
   const VOLUME_STEP = 0.05;  // one press of Up or Down is 5%
   const SETTLE_MS = 3000;    // correct player resets this long after a video starts
   const INPUT_MS = 1000;     // a play this soon after real input is the user's choice
+  const GIF_GRACE = 0.5;     // seconds of playback before a silent loop is taken for a GIF
+  const GIF_MAX = 8;         // a silent clip no longer than this is a GIF, not a video
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const round2 = (v) => Math.round(v * 100) / 100;
@@ -80,9 +84,14 @@
         if (d.seq <= lastSeq) return;
         lastSeq = d.seq;
       }
-      const nextRate = typeof d.rate === 'number' && isFinite(d.rate)
-        ? round2(clamp(d.rate, RATE_MIN, RATE_MAX))
-        : null;
+      // `own` marks the echo of a write this frame made. Its rate is the one
+      // already on the video; adopting it would walk the speed backwards
+      // through every press until the last echo arrived.
+      const nextRate = d.own === true
+        ? carryRate                                  // our own write, already applied
+        : (typeof d.rate === 'number' && isFinite(d.rate)
+            ? round2(clamp(d.rate, RATE_MIN, RATE_MAX))
+            : null);
       const prevRate = carryRate;
       const wasActive = siteActive;
 
@@ -230,13 +239,53 @@
   // --- tracking ------------------------------------------------------------
   const tracked = new Map(); // HTMLVideoElement -> entry
 
+  // A GIF served as a video: Discord, Reddit and others ship GIFs as short
+  // silent MP4/WebM loops in a plain <video>, so the tag alone cannot tell them
+  // from a video. Three standard things can:
+  //
+  //   - it loops, and it has no native controls of its own; and
+  //   - it is short (a GIF is a few seconds), or loops outright; and
+  //   - it carries no audio track at all.
+  //
+  // Only the last one is hard to see. captureStream() would answer it exactly,
+  // but it throws a SecurityError for cross-origin media - which is how a CDN
+  // serves these clips - so the answer comes from Chromium's decoded-byte
+  // counter instead: a clip with an audio track decodes audio within ~80 ms of
+  // playback, even while muted, and one without an audio track never does.
+  //
+  // Until that is settled the clip is treated as a GIF, so a GIF never gets a
+  // line; a real clip's line appears a fraction of a second after it starts.
+  // 0 = a real video, 1 = a GIF, -1 = not settled yet.
+  function gifState(v, entry) {
+    if (entry.gif) return 1;
+    if (entry.audio) return 0;
+    if (v.controls) { entry.audio = true; return 0; }          // a player of its own
+    const looping = v.loop === true;
+    const short = isFinite(v.duration) && v.duration > 0 && v.duration <= GIF_MAX;
+    if (!looping && !short) { entry.audio = true; return 0; }
+    const bytes = v.webkitAudioDecodedByteCount;
+    if (typeof bytes !== 'number') { entry.audio = true; return 0; } // no way to tell
+    if (bytes > 0) { entry.audio = true; return 0; }            // it has sound: a video
+    if ((v.currentTime || 0) >= GIF_GRACE) { entry.gif = true; return 1; }
+    return -1;
+  }
+
+  const isGif = (v) => {
+    const entry = tracked.get(v);
+    return !!entry && entry.gif === true;
+  };
+
   function track(video) {
     if (!(video instanceof HTMLVideoElement) || tracked.has(video)) return;
-    tracked.set(video, { line: null, trackEl: null, glideEl: null, started: false });
+    const entry = { line: null, trackEl: null, glideEl: null, started: false, audio: false, gif: false };
+    tracked.set(video, entry);
     for (const ev of ['play', 'playing', 'pause', 'ended', 'emptied', 'seeked',
                       'loadedmetadata', 'durationchange', 'ratechange']) {
       video.addEventListener(ev, poke, true);
     }
+    // A new source into the same element is a new clip: forget what the old
+    // one was.
+    video.addEventListener('loadstart', () => { entry.audio = false; entry.gif = false; }, true);
     poke();
   }
 
@@ -320,6 +369,16 @@
 
         const playing = !video.paused && !video.ended;
         if (playing) entry.started = true;
+
+        // A GIF is not something to track: no line, and the keys skip it (see
+        // getTargetVideo). A playing clip that is not settled yet keeps the loop
+        // awake until it is; a paused one waits for its own play event.
+        const gif = gifState(video, entry);
+        if (gif !== 0) {
+          hideLine(entry);
+          if (gif < 0 && playing) keepGoing = true;
+          continue;
+        }
 
         const rects = video.getClientRects();
         let onscreen = false;
@@ -463,7 +522,7 @@
     if (!pointer) return null;
     const under = [];
     for (const v of tracked.keys()) {
-      if (!v.isConnected) continue;
+      if (!v.isConnected || isGif(v)) continue;
       const r = v.getBoundingClientRect();
       if (r.width <= 0 || r.height <= 0) continue;
       if (pointer.x >= r.left && pointer.x <= r.right &&
@@ -490,9 +549,9 @@
 
     const fs = document.fullscreenElement;
     if (fs) {
-      if (fs.tagName === 'VIDEO') return fs;
+      if (fs.tagName === 'VIDEO' && !isGif(fs)) return fs;
       for (const v of tracked.keys()) {
-        if (v.isConnected && withinHost(v, fs)) return v;
+        if (v.isConnected && !isGif(v) && withinHost(v, fs)) return v;
       }
     }
 
@@ -504,7 +563,7 @@
     const vw = window.innerWidth || document.documentElement.clientWidth;
     const vh = window.innerHeight || document.documentElement.clientHeight;
     for (const v of tracked.keys()) {
-      if (!v.isConnected) continue;
+      if (!v.isConnected || isGif(v)) continue;
       const r = v.getBoundingClientRect();
       const w = Math.min(r.right, vw) - Math.max(r.left, 0);
       const h = Math.min(r.bottom, vh) - Math.max(r.top, 0);

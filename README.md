@@ -57,7 +57,7 @@ The **Shortcuts** section shows the same key table as above.
 - **Typing is safe:** shortcuts are ignored in text fields and editable areas.
 - **Paused stays paused:** a video you pause with the keys is not resumed by the site on its own, for example when you switch away and back to the tab. It plays again when you start it (key or click) or when the site loads a new video into the player.
 - **Only the keys used are intercepted:** anything else passes through to the site.
-- **The line:** one line per video that has started playing, stacked upward with the newest at the bottom. A paused video keeps its line frozen while it is on screen. A live stream has no progress, so it shows a dim line with a sliding segment. Fullscreen hides the lines. GIFs, APNGs, canvas and CSS animations never get a line — only real `<video>` elements count.
+- **The line:** one line per video that has started playing, stacked upward with the newest at the bottom. A paused video keeps its line frozen while it is on screen. A live stream has no progress, so it shows a dim line with a sliding segment. Fullscreen hides the lines. GIFs, APNGs, canvas and CSS animations never get a line — only real `<video>` elements count, and a GIF that a site ships as a short silent `<video>` loop (Discord, Reddit comment sections) is recognised and skipped.
 - **Multiple videos:** each playing video gets its own line; the shortcuts act on the one under the cursor, or the most visible one.
 
 ## How it works
@@ -108,8 +108,8 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 Output, in `build/`:
 
 ```
-seekBar_v1.0.zip   Load unpacked / release download
-seekBar_v1.0.crx   signed package
+seekBar_v1.1.zip   Load unpacked / release download
+seekBar_v1.1.crx   signed package
 ```
 
 The build keeps the version in the file name; the release attaches the same files as `seekBar.zip` and `seekBar.crx`. `key.pem` is created on the first build and reused afterwards: it fixes the extension ID, so keep it out of the repository and back it up. `-SkipIcons` and `-SkipCrx` are available when only part of the build is needed.
@@ -121,6 +121,7 @@ The build keeps the version in the file name; the release attaches the same file
 - Fullscreen uses the raw video element, so the site's own controls are not shown while in fullscreen.
 - Speed changes made through a site's own menu are not saved; only the keys and the popup are.
 - When a site resumes a video we paused, its play briefly starts before it is paused again, so a very short audio blip or UI flicker is possible.
+- A short, silent clip in a player with no native controls counts as a GIF and gets no line. Telling a GIF served as a video from a real video can only go by the clip itself: it has no audio track. Anything with sound is always treated as a video.
 - After updating the extension, reload any tab whose keys or line stop responding; its old copy keeps running until then.
 
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the version history.

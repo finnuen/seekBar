@@ -1,5 +1,10 @@
 # Release notes
 
+## v1.1
+
+- GIFs that sites ship as short silent `<video>` loops — Discord messages, Reddit comment sections — no longer get a progress line, and the shortcuts skip them. A short looping clip that has sound is still a video and keeps its line.
+- Pressing a speed key twice in quick succession no longer makes the speed jump back to the older value for a moment while the change is being saved.
+
 ## v1.0
 
 First release.

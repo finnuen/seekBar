@@ -36,7 +36,7 @@ No bundler, dependency or test framework. `extension/` is loaded as-is.
 
 ## Design rules (don't break these)
 
-1. **Works on every site.** No site selectors or class names; only standard `<video>` behavior. `manifest.json` matches `<all_urls>`, all frames.
+1. **Works on every site.** No site selectors or class names; only standard `<video>` behavior, plus Chromium's decoded-audio counter for telling a GIF from a video (see *GIFs that arrive as videos*). `manifest.json` matches `<all_urls>`, all frames.
 2. **Two worlds, one job each.** Storage and CSS injection live in the isolated world (`content.js`); DOM discovery and key handling live in the page world (`main.js`). Page-world code cannot call `chrome.storage`; don't try.
 3. **Minimal interference.** A key is swallowed (`preventDefault` + `stopImmediatePropagation`) only when a video is on screen and the extension acted on that key. Everything else passes through. With *Enable audio control* on, `↑`/`↓` are volume while a video is on screen, so they stop scrolling there; with no video on screen, or the switch off, they scroll normally. `Ctrl`+`↑`/`↓` is left to the browser.
 4. **Audio control is a gate, and it is off until it is switched on.** `↑`/`↓`/`M` set `video.volume` / `video.muted` on the target video and nowhere else. Never store a volume, never re-apply one on `loadedmetadata`/`play`, never unmute on page load, no *Enable audio at start*. This deliberately works below the site: a player that keeps its own mute flag or level will not redraw its icon or slider, which is why `settings.audioControl` (popup: *Enable audio control*, default off) gates the three keys — while it is off they return `false` from `handle()` and the site gets them untouched. Do not reintroduce control-clicking heuristics for mute or level: that path was tried, is unreliable across players, and was rejected.
@@ -53,12 +53,12 @@ No bundler, dependency or test framework. `extension/` is loaded as-is.
 | main → content | `{type:'ready'}` | main is alive; content replies with settings |
 | main → content | `{type:'need-style'}` | stylesheet missing; inject it |
 | main → content | `{type:'carry', rate}` | store the speed (`null` = remove the saved speed) |
-| content → main | `{type:'settings', settings, siteActive, rate, id}` | full state; also sent after every storage change |
+| content → main | `{type:'settings', settings, siteActive, rate, id, seq, own}` | full state; also sent after every storage change |
 | content → main | `{type:'style-injected'}` | CSS just landed; let the overlay pick it up |
 
 `id` (content's per-frame `PAGE_ID`) is written into `carry.src`. A storage change whose `src` is this frame's own id is ignored, so rapid key presses are not overwritten by stale echoes. Every other change is adopted and applied.
 
-Each push also carries `seq`, a counter for that frame's pushes, and a push that follows a write sends the rate just written instead of re-reading storage. Two fast key presses start two overlapping storage reads, and without that pair the older read can finish last and hand the tab the speed from one press ago; `main.js` drops a push whose `seq` it has already passed (a new `id`, from a re-injected `content.js`, restarts the count).
+Each push also carries `seq`, a counter for that frame's pushes, and `own`, true on the push that follows this frame's own write. `main.js` drops a push whose `seq` it has already passed (a new `id`, from a re-injected `content.js`, restarts the count) and never adopts the rate of an `own` push: that rate is already on the video, and adopting it would walk the speed backwards through every press until the last echo arrived. Settings in an `own` push still apply.
 
 `content.js` may be re-injected after an extension reload; it disposes the previous instance through `window.__seekBarRelay.dispose()` before taking over. `main.js` guards itself with `window.__seekBarMain` and survives reloads, which is fine because it uses no extension APIs.
 
@@ -83,10 +83,17 @@ Volume and mute are **not** stored anywhere: `audioControl` switches the keys on
 - A 2-second watchdog rescans the document (skipped while `document.hidden`).
 - `tracked` is a `Map<HTMLVideoElement, entry>` used by both the overlay and the keyboard.
 
+### GIFs that arrive as videos
+
+- Discord, Reddit comment sections and other feeds ship GIFs as short, silent, looping MP4/WebM inside a plain `<video>`, so the tag cannot tell them from a video. `gifState()` decides, using only standard properties: no native `controls`, and either `loop` or a duration of at most `GIF_MAX` (8 s), and **no audio track at all**.
+- The audio track is the discriminator. `captureStream().getAudioTracks()` answers it exactly but throws `SecurityError` for cross-origin media, which is how a CDN serves these clips, so `webkitAudioDecodedByteCount` is used instead: a clip with audio decodes bytes within ~80 ms of playback (muted or not), one without never does.
+- Until that is settled the clip is treated as a GIF and gets no line; a real clip's line appears a fraction of a second after it starts. An unsettled *playing* clip keeps the render loop awake, a paused one waits for its own play event.
+- A settled GIF is skipped by `getTargetVideo()` (fullscreen, hovered and most-visible paths), so the keys act on a real video instead. `loadstart` resets both flags: a new source in the same element is a new clip.
+
 ### Overlay
 
 - `#seekbar-overlay-root` is a fixed, zero-height, `pointer-events: none` element at the bottom; its styles live in `content.js` and are injected by that script (page CSP does not apply to content-script CSS).
-- One `.sb-line` per video that has started playing. Height 2 px, stacked with a 3 px stride; newest discovered at the bottom.
+- One `.sb-line` per video that has started playing. Height 2 px, stacked with a 3 px stride; newest discovered at the bottom. A GIF that arrives as a `<video>` never gets one (see above).
 - Determinate video: `transform: scaleX(currentTime / duration)`.
 - Live stream playing: dim track + sliding `.sb-glide`; paused live: dim static line.
 - A paused video keeps its frozen line only while it is on screen. A video that never played shows nothing.
@@ -141,12 +148,13 @@ Load `extension/` from `chrome://extensions` (Developer mode, *Load unpacked*), 
 3. Typing in a comment box or search field does not trigger anything.
 4. Volume (with *Enable audio control* on): `↑`/`↓` move the target video 5% per press, holding them ramps, `M` mutes and unmutes; one press up from a muted video lands around 50%, not at full blast. Scroll to the next video and confirm the volume did **not** follow; reload and confirm nothing was remembered. With no video on screen, or the switch off, `↑`/`↓` scroll the page.
 5. Popup switch *Enable audio control*: it starts off, so `↑`/`↓` must scroll the page and `M` must do nothing to the video. Switch it on and they control the video; switch it off and they go back to the site. The switch must survive a reload.
-6. A paused video stays paused after switching tabs and back (Instagram is the useful test).
-7. The line matches the video's progress, stacks for several videos, hides in fullscreen, and stays put when paused.
-8. A site whose player is a web component (shadow DOM) is controlled; test a closed root if you can.
-9. A video inside an iframe responds while the frame has focus.
-10. Popup: enable/disable, the audio switch, speed slider and reset, color presets/custom, site lists. The speed slider moves while the keyboard changes speed.
-11. After an extension reload, open tabs either keep working (old main.js) or are re-injected; a tab that misbehaves should be reloaded.
+6. A GIF in a Discord message or a Reddit comment section — shipped as a silent looping `<video>` — gets **no** line, and the shortcuts skip it; a short looping clip that has sound keeps its line. A muted Instagram reel (looping, no native controls) must keep its line too: it has an audio track.
+7. A paused video stays paused after switching tabs and back (Instagram is the useful test).
+8. The line matches the video's progress, stacks for several videos, hides in fullscreen, and stays put when paused.
+9. A site whose player is a web component (shadow DOM) is controlled; test a closed root if you can.
+10. A video inside an iframe responds while the frame has focus.
+11. Popup: enable/disable, the audio switch, speed slider and reset, color presets/custom, site lists. The speed slider moves while the keyboard changes speed.
+12. After an extension reload, open tabs either keep working (old main.js) or are re-injected; a tab that misbehaves should be reloaded.
 
 There is no committed automated test. A throwaway smoke test can load the unpacked extension into headless Edge over CDP and drive synthetic keydown events; it is worth doing after changes to `main.js`.
 
@@ -185,4 +193,5 @@ There is no committed automated test. A throwaway smoke test can load the unpack
 - Fullscreen uses the raw video element, so the site's controls are not shown.
 - Changes made in a site's own speed menu are not saved.
 - Resuming a video we paused can produce a brief audio blip before it is paused again.
+- A short, silent clip in a player without native controls is taken for a GIF and gets no line. That is the price of recognising a GIF that arrives as a video; a clip with any audio track is always treated as a video.
 - Audio control is a gate, so a player that keeps a mute icon or volume slider of its own will not redraw it, and the site may keep sounding muted while the element is not (Instagram, Threads, Facebook). That is expected, is stated in the popup and the README, and is why the gate is off by default behind *Enable audio control*.
